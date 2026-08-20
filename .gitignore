@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+experiment/results/
+experiment/config.json
+.env
+report/*.png
+report/*.csv
+report/*.txt
+.pytest_cache/
+# 临时验证/调试文件
+_*.png
+_*.html
+*.log

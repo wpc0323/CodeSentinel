@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>题目 - OJ-Anti-AI</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="container">
+  <div class="cols">
+    <!-- 左：题面 -->
+    <div>
+      <div class="card">
+        <div id="problem-head"></div>
+        <div class="statement" id="statement"></div>
+        <div id="statement-foot"></div>
+      </div>
+    </div>
+
+    <!-- 右：防护控制台 + 提交 -->
+    <div>
+      <div class="card">
+        <h2>🛡️ 防护机制控制台</h2>
+        <div class="modes" id="modes"></div>
+        <div class="toolbar" style="margin-top:14px">
+          <button class="ghost" onclick="reshuffleVariant()" title="生成新版本：P1/P3 模式下题目数值/背景/样例会变化（刷新页面效果相同）">🔄 换一个同构版本</button>
+          <button class="ghost" id="antiPeekBtn" onclick="toggleAntiPeek(!antiPeekOn)" title="开启后：切到其他标签页/窗口超过 1 秒再回来，会自动换同构版本">👁️ 防窥模式：关</button>
+          <button class="ghost" id="watermarkBtn" onclick="toggleWatermark()" title="开启/关闭页面水印">💧 水印：开</button>
+          <button class="ghost" onclick="resetSession()" title="生成新会话 ID：归档历史提交、开启新的完成记录">📋 重置会话</button>
+        </div>
+        <div class="kv" id="meta"></div>
+      </div>
+
+      <div class="card">
+        <h2>📝 提交代码</h2>
+        <div class="toolbar">
+          <select id="lang">
+            <option value="python3">Python 3</option>
+            <option value="cpp">C++（需本机 g++）</option>
+          </select>
+          <button id="submitBtn" onclick="submitCode()">提交判题</button>
+          <span id="submitSpin" style="display:none"><span class="spin"></span> 判题中…</span>
+        </div>
+        <textarea class="code" id="code" spellcheck="false">import sys
+
+def main():
+    data = sys.stdin.read().split()
+    # 在此编写你的解法
+    print(data)
+
+main()
+</textarea>
+      </div>
+
+      <div class="card" id="resultCard" style="display:none">
+        <h2>📊 判定结果</h2>
+        <div id="result"></div>
+      </div>
+
+      <div class="card">
+        <h2>🕘 本题我的提交</h2>
+        <div id="mySubs" class="muted">暂无提交</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="static/common.js?v=20"></script>
+<script>
+const MODE_OPTIONS = [
+  ["original", "P0 原始基线", "原始题目，无防护"],
+  ["variant", "P1 同构多版本", "机制一：会话绑定版本"],
+  ["distractor", "P2a 干扰注入", "机制二：混入干扰信息"],
+  ["hide", "P2b 约束隐藏", "机制二：隐藏关键约束"],
+  ["variant_distractor", "P3a 组合·干扰", "机制一 + 机制二a"],
+  ["variant_hide", "P3b 组合·隐藏", "机制一 + 机制二b"],
+];
+let pid = App.qs("id");
+let mode = App.qs("mode") || "original";
+// view_token：每次进入/刷新题目页生成新的随机 token，P1/P3 模式下按它分配同构版本
+// （刷新即换版本）；提交时带上同一 token 保证判题版本与展示一致。
+// 提交记录仍按 session 归集，历史完成情况保留。
+let viewToken = crypto.randomUUID();
+let currentVariantKey = "";  // 记录当前版本 key，换版本时作为 avoid 传给后端保证一定切换
+let lastAvoidKey = "";       // 记录上次换版本时避开的 key，提交时带上保证判题版本与展示一致
+
+function renderModes() {
+  document.getElementById("modes").innerHTML = MODE_OPTIONS.map(([v, t, d]) => `
+    <div class="mode-opt ${v === mode ? "on" : ""}" onclick="switchMode('${v}')">
+      <div class="t">${t}</div><div class="d">${d}</div>
+    </div>`).join("");
+}
+function switchMode(m) {
+  mode = m;
+  history.replaceState(null, "", `?id=${pid}&mode=${m}`);
+  renderModes();
+  loadProblem();
+}
+function resetSession() {
+  App.resetSession();
+  document.querySelector(".nav .session").textContent = "会话 " + App.getSession().slice(0, 18);
+  App.toast("已生成新会话：历史提交记录已归档到新会话");
+  loadProblem();
+}
+function reshuffleVariant() {
+  // 手动换版本：生成新 viewToken，并避开当前版本保证一定切换
+  viewToken = crypto.randomUUID();
+  App.toast("已切换到新的同构版本");
+  loadProblem(currentVariantKey);
+}
+
+// ---- 防窥模式：切到其他标签页/窗口再回来时自动换版本 ----
+let antiPeekOn = false;
+let leftAt = 0;  // 离开页面的时间戳
+function toggleAntiPeek(on) {
+  antiPeekOn = on;
+  localStorage.setItem("oj_anti_peek", on ? "1" : "0");
+  const btn = document.getElementById("antiPeekBtn");
+  if (btn) {
+    btn.classList.toggle("on", on);
+    btn.textContent = on ? "👁️ 防窥模式：开" : "👁️ 防窥模式：关";
+  }
+  App.toast(on ? "已开启防窥模式：切走再回来将自动换版本"
+               : "已关闭防窥模式");
+}
+document.addEventListener("visibilitychange", () => {
+  if (!antiPeekOn) return;
+  if (document.visibilityState === "hidden") {
+    leftAt = Date.now();
+  } else if (document.visibilityState === "visible" && leftAt > 0) {
+    // 离开超过 1 秒才触发，避免标签栏短暂闪烁误触
+    if (Date.now() - leftAt > 1000) {
+      viewToken = crypto.randomUUID();
+      App.toast("检测到页面失焦回归，已自动切换同构版本");
+      loadProblem(currentVariantKey);
+    }
+    leftAt = 0;
+  }
+});
+
+async function loadProblem(avoidKey) {
+  const session = App.getSession();
+  let url = `/api/problem/${pid}?session=${encodeURIComponent(session)}&mode=${mode}&view_token=${encodeURIComponent(viewToken)}`;
+  if (avoidKey) url += `&avoid=${encodeURIComponent(avoidKey)}`;
+  const v = await App.api(url);
+  currentVariantKey = v.variant_key;  // 记录当前版本，供下次换版本时避开
+  lastAvoidKey = avoidKey || "";      // 记录本次选版本用的 avoid，提交时带上保证判题一致
+  document.title = `${v.problem_id} ${v.title} - OJ-Anti-AI`;
+  document.getElementById("problem-head").innerHTML = `
+    <h1>${App.esc(v.problem_id)} · ${App.esc(v.title)}
+      ${App.badgeDifficulty(v.difficulty)}
+      ${v.tags.map(t => `<span class="badge tag">${App.esc(t)}</span>`).join("")}
+    </h1>`;
+  // 题面正文：改为 HTML5 Canvas 抗 AI 画板（文字绘制 + 随机波形/颜色干扰）。
+  // 仅在“获取题目” API 返回后才调用渲染函数。
+  const stEl = document.getElementById("statement");
+  try {
+    App.renderAntiAICanvas(stEl, v);
+  } catch (e) {
+    console.warn("anti-ai canvas render failed:", e);
+    // 兜底：画板异常时回退为纯文本，保证题目可用
+    stEl.innerHTML = `<p class="muted">题面渲染异常，请刷新重试。</p>`;
+  }
+  // 版本说明 + 样例区（样例需可复制，保留为纯文本 <pre>）
+  document.getElementById("statement-foot").innerHTML = `
+    <div class="section-cap">题目描述（当前版本：<span class="badge variant">${App.esc(v.variant_key)} ${App.esc(v.variant_label)}</span>
+      <span class="badge defense">${App.esc(v.defense_label)}</span>）</div>
+    ${v.samples.map((s, i) => `
+      <div class="section-cap">样例 ${i + 1}</div>
+      <div class="sample-grid">
+        <div class="sample-block"><div class="cap">输入</div><pre>${App.esc(s.input)}</pre></div>
+        <div class="sample-block"><div class="cap">输出</div><pre>${App.esc(s.output)}</pre></div>
+      </div>`).join("")}
+    <p class="muted" style="margin-top:16px">另有 ${v.test_count} 个隐藏测试点参与判题（判定与展示版本一致）。</p>`;
+  document.getElementById("meta").innerHTML = `
+    <div class="k">当前版本</div><div>${App.esc(v.variant_key)} · ${App.esc(v.variant_label)}</div>
+    <div class="k">防护状态</div><div>${App.esc(v.defense_label)}</div>
+    <div class="k">时间限制</div><div>${(v.time_limit_ms / 1000).toFixed(1)} s</div>
+    <div class="k">内存限制</div><div>${v.memory_limit_mb} MB</div>`;
+  loadMySubs();
+}
+
+async function submitCode() {
+  const code = document.getElementById("code").value;
+  const lang = document.getElementById("lang").value;
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  document.getElementById("submitSpin").style.display = "inline";
+  try {
+    const r = await App.post("/api/submit", {
+      problem_id: pid, session_id: App.getSession(), mode,
+      language: lang, code, view_token: viewToken, avoid: lastAvoidKey,
+    });
+    document.getElementById("resultCard").style.display = "";
+    const vc = r.verdict === "AC" ? "AC" : r.verdict;
+    document.getElementById("result").innerHTML = `
+      <div style="margin-bottom:12px">
+        <span class="verdict-big ${vc}">${App.esc(r.verdict)}</span>
+        <span class="muted" style="margin-left:10px">通过 ${r.passed}/${r.total} 测试点 ·
+          版本 <span class="badge variant">${App.esc(r.variant_key)}</span>
+          ${App.esc(r.defense_label)}</span>
+      </div>
+      ${r.message ? `<p class="muted" style="color:var(--bad)">${App.esc(r.message)}</p>` : ""}
+      <table class="tbl"><thead><tr>
+        <th>测试点</th><th style="width:110px">判定</th><th class="num" style="width:100px">耗时</th><th>备注</th>
+      </tr></thead><tbody>
+      ${r.detail.map(d => `<tr>
+        <td class="mono">${App.esc(d.name)}</td>
+        <td>${App.badgeVerdict(d.verdict)}</td>
+        <td class="num mono">${d.time_ms} ms</td>
+        <td class="muted mono" style="font-size:12px">${d.stderr ? App.esc(d.stderr.slice(0, 160)) : ""}</td>
+      </tr>`).join("")}
+      </tbody></table>`;
+    loadMySubs();
+  } catch (e) {
+    App.toast("提交失败: " + e.message);
+  } finally {
+    btn.disabled = false;
+    document.getElementById("submitSpin").style.display = "none";
+  }
+}
+
+async function loadMySubs() {
+  const data = await App.api(`/api/submissions?problem_id=${pid}&session_id=${encodeURIComponent(App.getSession())}&limit=10`);
+  const rows = data.submissions;
+  document.getElementById("mySubs").innerHTML = rows.length
+    ? `<table class="tbl"><thead><tr><th>#</th><th>判定</th><th>版本</th><th>防护</th><th>语言</th><th>时间</th></tr></thead>
+      <tbody>${rows.map(s => `<tr>
+        <td class="mono">${s.id}</td>
+        <td>${App.badgeVerdict(s.verdict)}</td>
+        <td class="mono">${App.esc(s.variant_key)}</td>
+        <td class="muted">${App.esc(s.mode)}</td>
+        <td class="mono">${App.esc(s.language)}</td>
+        <td class="muted">${App.timeAgo(s.ts)}</td>
+      </tr>`).join("")}</tbody></table>`
+    : `<span class="muted">暂无提交</span>`;
+}
+
+// ---- 水印开关 ----
+let wmOn = true;
+function toggleWatermark(on) {
+  if (typeof on === "boolean") wmOn = on; else wmOn = !wmOn;
+  if (App._wm) {
+    wmOn ? App._wm.show() : App._wm.hide();
+  }
+  localStorage.setItem("oj_watermark", wmOn ? "1" : "0");
+  const btn = document.getElementById("watermarkBtn");
+  if (btn) {
+    btn.classList.toggle("on", wmOn);
+    btn.textContent = wmOn ? "💧 水印：开" : "💧 水印：关";
+  }
+  App.toast(wmOn ? "水印已开启" : "水印已关闭");
+}
+
+if (!pid) {
+  document.body.querySelector(".container").innerHTML =
+    `<div class="card"><h1>缺少题目参数</h1><p class="muted">请从 <a href="index.html">题目列表</a> 进入。</p></div>`;
+} else {
+  renderModes();
+  // 解题界面水印：斜排、半透明、全屏平铺，文字可选中复制但不可删改。
+  // try-catch 防御：水印异常绝不阻断题目加载。
+  try { App._wm = App.initWatermark("本竞赛严禁ai答题"); } catch (e) { console.warn("watermark init failed:", e); }
+  // 恢复上次防窥模式状态
+  if (localStorage.getItem("oj_anti_peek") === "1") {
+    toggleAntiPeek(true);
+  }
+  // 恢复上次水印状态
+  if (localStorage.getItem("oj_watermark") === "0") {
+    toggleWatermark(false);
+  }
+  loadProblem().catch(e => App.toast("加载失败: " + e.message));
+}
+</script>
+</body>
+</html>

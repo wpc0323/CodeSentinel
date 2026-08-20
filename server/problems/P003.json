@@ -1,0 +1,246 @@
+{
+ "id": "P003",
+ "title": "日期推算",
+ "difficulty": "easy",
+ "tags": [
+  "模拟",
+  "日期"
+ ],
+ "time_limit_ms": 2000,
+ "memory_limit_mb": 256,
+ "variants": [
+  {
+   "key": "V0",
+   "label": "值日版",
+   "story": [
+    {
+     "text": "班级的值日表按日期连续轮换。给定起始日期和间隔天数，请你算出实际的值日日期。",
+     "hideable": false
+    },
+    {
+     "text": "起始日期可能位于任意年份，结果可能跨年进入之后的年份；闰年按公历规则判断（能被 4 整除且不被 100 整除，或能被 400 整除）。",
+     "hideable": true
+    }
+   ],
+   "input_format": "一行四个整数 $Y, M, D, k$，表示起始日期为 $Y$ 年 $M$ 月 $D$ 日，间隔 $k$ 天。",
+   "output_format": "一行，格式 `YYYY-MM-DD`（月和日不足两位补零），表示 $k$ 天后的日期。",
+   "constraints": [
+    {
+     "text": "$2000 \\le Y \\le 2099$",
+     "hideable": false
+    },
+    {
+     "text": "输入日期一定是合法日期",
+     "hideable": false
+    },
+    {
+     "text": "$0 \\le k \\le 3650$",
+     "hideable": false
+    }
+   ],
+   "samples": [
+    {
+     "input": "2026 8 19 0\n",
+     "output": "2026-08-19"
+    },
+    {
+     "input": "2026 12 17 20\n",
+     "output": "2027-01-06"
+    }
+   ],
+   "tests": [
+    {
+     "name": "feb",
+     "input": "2026 2 27 3\n",
+     "output": "2026-03-02",
+     "edge": "leap"
+    },
+    {
+     "name": "leap29",
+     "input": "2028 2 28 1\n",
+     "output": "2028-02-29",
+     "edge": "leap"
+    },
+    {
+     "name": "monthend",
+     "input": "2026 1 31 1\n",
+     "output": "2026-02-01",
+     "edge": null
+    },
+    {
+     "name": "bigk",
+     "input": "2000 3 1 365\n",
+     "output": "2001-03-01",
+     "edge": "bigk"
+    },
+    {
+     "name": "newyear",
+     "input": "2099 12 25 7\n",
+     "output": "2100-01-01",
+     "edge": "newyear"
+    }
+   ]
+  },
+  {
+   "key": "V1",
+   "label": "快递版",
+   "story": [
+    {
+     "text": "快递平台的订单在签收后再经过 $k$ 天会自动确认收货。给定签收日期和天数，请算出自动确认日期。",
+     "hideable": false
+    },
+    {
+     "text": "签收日期可能位于任意年份，确认日期可能跨年进入之后的年份；闰年按公历规则判断。",
+     "hideable": true
+    }
+   ],
+   "input_format": "一行四个整数 $Y, M, D, k$，表示签收日期为 $Y$ 年 $M$ 月 $D$ 日，再过 $k$ 天自动确认。",
+   "output_format": "一行，格式 `YYYY-MM-DD`（月和日不足两位补零），表示自动确认日期。",
+   "constraints": [
+    {
+     "text": "$2000 \\le Y \\le 2099$",
+     "hideable": false
+    },
+    {
+     "text": "输入日期一定是合法日期",
+     "hideable": false
+    },
+    {
+     "text": "$0 \\le k \\le 3650$",
+     "hideable": false
+    }
+   ],
+   "samples": [
+    {
+     "input": "2026 3 28 5\n",
+     "output": "2026-04-02"
+    },
+    {
+     "input": "2026 1 30 3\n",
+     "output": "2026-02-02"
+    }
+   ],
+   "tests": [
+    {
+     "name": "feb",
+     "input": "2027 2 26 4\n",
+     "output": "2027-03-02",
+     "edge": "leap"
+    },
+    {
+     "name": "leap29",
+     "input": "2024 2 28 2\n",
+     "output": "2024-03-01",
+     "edge": "leap"
+    },
+    {
+     "name": "monthend",
+     "input": "2026 4 30 2\n",
+     "output": "2026-05-02",
+     "edge": null
+    },
+    {
+     "name": "bigk",
+     "input": "2020 2 29 365\n",
+     "output": "2021-02-28",
+     "edge": "bigk"
+    },
+    {
+     "name": "newyear",
+     "input": "2026 12 31 1\n",
+     "output": "2027-01-01",
+     "edge": "newyear"
+    }
+   ]
+  },
+  {
+   "key": "V2",
+   "label": "农事版",
+   "story": [
+    {
+     "text": "农技站记录了种子的播种日期，某类作物从播种到收获恰好需要 $k$ 天。请根据播种日期推算收获日期。",
+     "hideable": false
+    },
+    {
+     "text": "播种日期可能位于任意年份，收获日期可能跨年进入之后的年份；闰年按公历规则判断。",
+     "hideable": true
+    }
+   ],
+   "input_format": "一行四个整数 $Y, M, D, k$，表示播种日期为 $Y$ 年 $M$ 月 $D$ 日，生长 $k$ 天后收获。",
+   "output_format": "一行，格式 `YYYY-MM-DD`（月和日不足两位补零），表示收获日期。",
+   "constraints": [
+    {
+     "text": "$2000 \\le Y \\le 2099$",
+     "hideable": false
+    },
+    {
+     "text": "输入日期一定是合法日期",
+     "hideable": false
+    },
+    {
+     "text": "$0 \\le k \\le 3650$",
+     "hideable": false
+    }
+   ],
+   "samples": [
+    {
+     "input": "2024 11 20 100\n",
+     "output": "2025-02-28"
+    },
+    {
+     "input": "2026 6 15 0\n",
+     "output": "2026-06-15"
+    }
+   ],
+   "tests": [
+    {
+     "name": "feb",
+     "input": "2100 2 27 2\n",
+     "output": "2100-03-01",
+     "edge": "leap"
+    },
+    {
+     "name": "leap29",
+     "input": "2024 2 28 1\n",
+     "output": "2024-02-29",
+     "edge": "leap"
+    },
+    {
+     "name": "monthend",
+     "input": "2026 12 30 3\n",
+     "output": "2027-01-02",
+     "edge": null
+    },
+    {
+     "name": "bigk",
+     "input": "2024 1 1 366\n",
+     "output": "2025-01-01",
+     "edge": "bigk"
+    },
+    {
+     "name": "newyear",
+     "input": "2049 12 20 12\n",
+     "output": "2050-01-01",
+     "edge": "newyear"
+    }
+   ]
+  }
+ ],
+ "distractor": {
+  "paragraph": "补充信息：2026 年 1 月 1 日是星期四；值日与发货在周末与法定节假日照常轮换。",
+  "baits": [
+   "星期",
+   "周末",
+   "节假日"
+  ]
+ },
+ "hide": {
+  "note": "隐藏「结果可能跨年/闰年」提示",
+  "edge_tests": [
+   "bigk",
+   "leap",
+   "newyear"
+  ]
+ },
+ "solution": "import sys\nfrom datetime import date, timedelta\ndef main():\n    y, m, d, k = map(int, sys.stdin.buffer.read().split())\n    r = date(y, m, d) + timedelta(days=k)\n    print(\"%04d-%02d-%02d\" % (r.year, r.month, r.day))\nmain()\n"
+}

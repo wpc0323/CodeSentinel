@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实验数据 - OJ-Anti-AI</title>
+<link rel="stylesheet" href="static/style.css?v=4">
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <h1>对照实验数据</h1>
+    <p class="muted">
+      实验由 <code>experiment/run_experiment.py</code> 执行（或 <code>start.py --mock-experiment</code> 演示模式），
+      结果写入 <code>data/oj.db</code>。详细统计与显著性检验见 <code>experiment/analyze.py</code> 输出（report/ 目录）。
+    </p>
+    <div id="empty" class="muted">暂无实验数据。可先运行：<code>python start.py --mock-experiment</code></div>
+  </div>
+
+  <div class="card" id="overallCard" style="display:none">
+    <h2>各防护状态总览</h2>
+    <div id="barsOverall" class="bars" style="margin-bottom:18px; overflow-x:auto"></div>
+    <div style="overflow-x:auto"><table class="tbl" id="overallTbl" style="min-width:600px"></table></div>
+  </div>
+
+  <div class="card" id="modelCard" style="display:none">
+    <h2>按模型细分</h2>
+    <div style="overflow-x:auto"><table class="tbl" id="modelTbl" style="min-width:500px"></table></div>
+  </div>
+
+  <div class="card" id="probCard" style="display:none">
+    <h2>按题目细分（通过率矩阵）</h2>
+    <div style="overflow-x:auto"><table class="tbl" id="probTbl" style="min-width:400px"></table></div>
+  </div>
+
+  <div class="card" id="verdictCard" style="display:none">
+    <h2>判定类型分布</h2>
+    <div style="overflow-x:auto"><table class="tbl" id="verdictTbl" style="min-width:300px"></table></div>
+  </div>
+</div>
+<script src="static/common.js?v=20"></script>
+<script>
+renderNav("experiment");
+const DEFENSE_NAME = {
+  P0: "P0 原始基线", P1: "P1 同构多版本", P2: "P2 信息扰动", P3: "P3 组合防护",
+};
+
+async function load() {
+  const s = await App.api("/api/experiment/summary");
+  if (!s.total_runs) return;
+  document.getElementById("empty").style.display = "none";
+  document.getElementById("overallCard").style.display = "";
+  document.getElementById("modelCard").style.display = "";
+  document.getElementById("probCard").style.display = "";
+  document.getElementById("verdictCard").style.display = "";
+
+  const maxRate = Math.max(...s.overall.map(r => r.n ? 100 * r.ac / r.n : 0), 1);
+  document.getElementById("barsOverall").innerHTML = s.overall.map(r => {
+    const rate = r.n ? (100 * r.ac / r.n).toFixed(1) : "0.0";
+    // 柱子宽度按通过率比例渲染，使 100% 的状态（基线）填满轨道、未满的按真实比例缩短
+    const widthPct = r.n ? (100 * r.ac / r.n) : 0;
+    const cls = r.defense === "P0" ? "" : "r";
+    return `<div class="bar-row">
+      <div><b>${r.defense}</b> <span class="muted" style="font-size:12px">${(DEFENSE_NAME[r.defense] || "").replace(r.defense + " ", "")}</span></div>
+      <div class="bar-track"><div class="bar-fill ${cls}" style="width:${widthPct.toFixed(1)}%"></div></div>
+      <div class="bar-val">通过率 ${rate}%（${r.ac}/${r.n}）</div>
+    </div>`;
+  }).join("");
+
+  document.getElementById("overallTbl").innerHTML = `
+    <thead><tr><th>防护状态</th><th class="num">求解次数</th><th class="num">AC</th>
+    <th class="num">通过率</th><th class="num">误导数</th><th class="num">误导率</th>
+    <th class="num">平均耗时(s)</th></tr></thead><tbody>
+    ${s.overall.map(r => `<tr>
+      <td><b>${r.defense}</b> <span class="muted" style="font-size:12px">${(DEFENSE_NAME[r.defense] || "").replace(r.defense + " ", "")}</span></td>
+      <td class="num mono">${r.n}</td><td class="num mono">${r.ac}</td>
+      <td class="num mono">${r.n ? (100 * r.ac / r.n).toFixed(1) : 0}%</td>
+      <td class="num mono">${r.mislead}</td>
+      <td class="num mono">${r.n ? (100 * r.mislead / r.n).toFixed(1) : 0}%</td>
+      <td class="num mono">${r.avg_elapsed ? r.avg_elapsed.toFixed(1) : "-"}</td>
+    </tr>`).join("")}</tbody>`;
+
+  document.getElementById("modelTbl").innerHTML = `
+    <thead><tr><th>防护状态</th><th>模型</th><th class="num">次数</th><th class="num">AC</th>
+    <th class="num">通过率</th><th class="num">误导率</th></tr></thead><tbody>
+    ${s.by_model.map(r => `<tr>
+      <td><b>${r.defense}</b> <span class="muted" style="font-size:12px">${(DEFENSE_NAME[r.defense] || "").replace(r.defense + " ", "")}</span></td>
+      <td class="mono">${App.esc(r.model)}</td>
+      <td class="num mono">${r.n}</td><td class="num mono">${r.ac}</td>
+      <td class="num mono">${r.n ? (100 * r.ac / r.n).toFixed(1) : 0}%</td>
+      <td class="num mono">${r.n ? (100 * r.mislead / r.n).toFixed(1) : 0}%</td>
+    </tr>`).join("")}</tbody>`;
+
+  // 题目 × 防护 通过率矩阵（表头用简短标签，避免长名称挤压导致 P0/P1 显示不全）
+  const problems = [...new Set(s.by_problem.map(r => r.problem_id))].sort();
+  const defenses = ["P0", "P1", "P2", "P3"];
+  document.getElementById("probTbl").innerHTML = `
+    <thead><tr><th>题目</th>${defenses.map(d => `<th class="num" title="${DEFENSE_NAME[d]}">${d}</th>`).join("")}</tr></thead>
+    <tbody>${problems.map(p => `<tr><td class="mono">${p}</td>${defenses.map(d => {
+      const r = s.by_problem.find(x => x.problem_id === p && x.defense === d);
+      return `<td class="num mono">${r ? `${(100 * r.ac / r.n).toFixed(0)}%<br><span class="muted" style="font-size:11px">${r.ac}/${r.n}</span>` : "-"}</td>`;
+    }).join("")}</tr>`).join("")}</tbody>`;
+
+  document.getElementById("verdictTbl").innerHTML = `
+    <thead><tr><th>防护状态</th><th>判定</th><th class="num">次数</th></tr></thead><tbody>
+    ${s.by_verdict.map(r => `<tr>
+      <td>${DEFENSE_NAME[r.defense] || r.defense}</td>
+      <td>${App.badgeVerdict(r.verdict)}</td>
+      <td class="num mono">${r.n}</td>
+    </tr>`).join("")}</tbody>`;
+}
+load().catch(e => App.toast("加载失败: " + e.message));
+</script>
+</body>
+</html>

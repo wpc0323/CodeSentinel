@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>提交记录 - OJ-Anti-AI</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <h1>提交记录</h1>
+    <div class="toolbar">
+      <select id="problemFilter"><option value="">全部题目</option></select>
+      <select id="scopeFilter">
+        <option value="">全部会话（含实验）</option>
+        <option value="mine">仅当前会话</option>
+      </select>
+      <button class="ghost" onclick="load()">刷新</button>
+    </div>
+    <table class="tbl">
+      <thead><tr>
+        <th style="width:60px">#</th><th style="width:80px">题目</th><th>判定</th>
+        <th style="width:70px">版本</th><th>防护模式</th><th style="width:80px">语言</th>
+        <th class="num" style="width:90px">通过</th><th>会话</th><th>时间</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="detail" style="margin-top:16px"></div>
+  </div>
+</div>
+<script src="static/common.js?v=20"></script>
+<script>
+renderNav("submissions");
+
+async function load() {
+  const pid = document.getElementById("problemFilter").value;
+  const scope = document.getElementById("scopeFilter").value;
+  let q = "/api/submissions?limit=100";
+  if (pid) q += `&problem_id=${pid}`;
+  if (scope === "mine") q += `&session_id=${encodeURIComponent(App.getSession())}`;
+  const data = await App.api(q);
+  document.getElementById("rows").innerHTML = data.submissions.map(s => `
+    <tr style="cursor:pointer" onclick="showDetail(${s.id})">
+      <td class="mono">${s.id}</td>
+      <td class="mono">${App.esc(s.problem_id)}</td>
+      <td>${App.badgeVerdict(s.verdict)}</td>
+      <td class="mono">${App.esc(s.variant_key)}</td>
+      <td class="muted">${App.esc(s.mode)}</td>
+      <td class="mono">${App.esc(s.language)}</td>
+      <td class="num mono">${s.passed}/${s.total}</td>
+      <td class="muted mono" style="font-size:12px">${App.esc(s.session_id.slice(0, 14))}…</td>
+      <td class="muted">${App.timeAgo(s.ts)}</td>
+    </tr>`).join("") || `<tr><td colspan="9" class="muted">暂无提交</td></tr>`;
+}
+
+async function showDetail(sid) {
+  const s = await App.api(`/api/submission/${sid}`);
+  document.getElementById("detail").innerHTML = `
+    <div class="section-cap">提交 #${s.id} 代码</div>
+    <pre class="code">${App.esc(s.code)}</pre>`;
+}
+
+(async () => {
+  const data = await App.api("/api/problems");
+  document.getElementById("problemFilter").innerHTML =
+    `<option value="">全部题目</option>` +
+    data.problems.map(p => `<option value="${p.id}">${p.id} ${App.esc(p.title)}</option>`).join("");
+  load();
+})();
+document.getElementById("problemFilter").onchange = load;
+document.getElementById("scopeFilter").onchange = load;
+</script>
+</body>
+</html>
