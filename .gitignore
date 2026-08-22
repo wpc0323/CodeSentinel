@@ -1,15 +1,33 @@
-.venv/
-__pycache__/
-*.pyc
-data/
-experiment/results/
-experiment/config.json
-.env
-report/*.png
-report/*.csv
-report/*.txt
-.pytest_cache/
-# 临时验证/调试文件
+# ============================================================
+# 依赖与包管理：虚拟环境与 Python 缓存产物
+# ============================================================
+.venv/                       # Python 虚拟环境（start.py 自动创建，体积大）
+__pycache__/                 # Python 字节码缓存（每个 .py 自动生成）
+*.pyc                        # 编译产物
+.pytest_cache/               # 测试运行缓存
+
+# ============================================================
+# 敏感信息：密钥、令牌、私有配置
+# ============================================================
+.env                         # 通用环境变量文件（dotenv）
+experiment/config.json       # 真实 API 配置（含 base_url/model，通过 api_key_env 引用环境变量）
+# 仓库只保留 config.example.json 模板；密钥应通过 set DEEPSEEK_API_KEY=xxx 等方式设环境变量
+
+# ============================================================
+# 构建与本地产物：日志、临时调试、运行时数据、实验输出
+# ============================================================
+*.log                        # 通用日志文件
+server.log                   # 后端运行日志
+server_err.log               # 后端错误日志
+
+data/                        # SQLite 数据库目录（运行时生成，体积大且含会话历史）
+report/                      # 实验分析输出（CSV/PNG/TXT，由 analyze.py 重新生成）
+
+# 临时验证/调试文件（命名以下划线开头，不入库）
 _*.png
 _*.html
-*.log
+_*.py
+
+# 操作系统垃圾
+.DS_Store                    # macOS
+Thumbs.db                    # Windows
