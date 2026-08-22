@@ -196,5 +196,4 @@ oj-anti-ai/
 | 误导率 | P2a：采纳蜜饵关键词；P2b：边界测试点失守 |
 | 错误类型分布 | AC/WA/TLE/RE/CE 占比 |
 
-显著性检验：P1/P2/P3 对 P0 的 2×2 卡方检验（α=0.05），见 `report/statistics.txt`。
 
