@@ -220,6 +220,9 @@ const App = {
   // 水印实例引用（由 initWatermark 返回，外部通过 App._wm 访问）
   _wm: null,
 
+  // 抗 AI 画板中的"AI 干扰行"开关（默认开启）。可在控制台风关闭。
+  _aiHintOn: true,
+
   // ---- 抗 AI 画板：把题面文字画到 Canvas，叠加随机波形与颜色干扰 ----
   // 目的：让纯文本抓取 / 复制粘贴 / AI 截图 OCR 都难以直接得到干净题面。
   // 用法：App.renderAntiAICanvas(container, viewData)
@@ -243,7 +246,7 @@ const App = {
     mctx.font = FONT;
 
     // 1) 整理段落块，同时用真实像素宽度折行
-    const blocks = App._buildCanvasBlocks(viewData, mctx, MAX_TEXT_W);
+    const blocks = App._buildCanvasBlocks(viewData, mctx, MAX_TEXT_W, App._aiHintOn);
 
     // 2) 计算总高度
     let totalH = PAD * 2;
@@ -286,7 +289,7 @@ const App = {
 
   // 把视图对象的纯文本字段整理成有序段落块
   // ctx / maxW 用于按真实像素宽度折行，避免文字溢出 canvas 边界
-  _buildCanvasBlocks(view, ctx, maxW) {
+  _buildCanvasBlocks(view, ctx, maxW, aiHintOn) {
     const out = [];
     // 同一道题内固定一个 AI 标签，保证所有干扰行一致
     const tags = ["cs_7F2", "cs_A3d", "cs_91x", "cs_b2K", "cs_cF7"];
@@ -297,8 +300,9 @@ const App = {
       const raw = String(text).split(/\n+/).map(s => s.trim()).filter(Boolean);
       const lines = [];
       for (const seg of raw) lines.push(...App._wrapTextByWidth(ctx, seg, maxW));
-      // 在段落行之间随机插入 1~2 条 AI 干扰行（格式与正文一致，前空四格）
-      if (lines.length >= 2) {
+      // 段落行之间随机插入 1~2 条 AI 干扰行（格式与正文一致，前空四格）
+      // 仅当开关开启时插入
+      if (aiHintOn && lines.length >= 2) {
         const count = Math.random() < 0.6 ? 1 : 2;
         for (let i = 0; i < count; i++) {
           const pos = 1 + Math.random() * (lines.length - 1) | 0;
@@ -307,13 +311,28 @@ const App = {
       }
       out.push({ title, lines });
     };
-    if (view.statement && view.statement.length) {
+    // 题目描述：优先用树结构（statement_tree：段落节点 -> 句子叶子），
+    // 逐段落渲染并保持层级；无树时向下兼容旧版 string[] 形态。
+    if (view.statement_tree && view.statement_tree.length) {
+      const paras = view.statement_tree
+        .map(n => (n.sentences && n.sentences.length ? n.sentences : [n.text])
+          .map(s => App.mdPlain(s)).join("\n"))
+        .join("\n");
+      pushLines("题目描述", paras);
+    } else if (view.statement && view.statement.length) {
       let joined = view.statement.map(s => App.mdPlain(s)).join("\n");
       pushLines("题目描述", joined);
     }
     pushLines("输入格式", view.input_format ? App.mdPlain(view.input_format) : "");
     pushLines("输出格式", view.output_format ? App.mdPlain(view.output_format) : "");
-    if (view.constraints && view.constraints.length) {
+    // 数据范围与约定：优先用树，兼容旧 string[] / {text} 列表
+    if (view.constraints_tree && view.constraints_tree.length) {
+      const c = view.constraints_tree
+        .map(n => (n.sentences && n.sentences.length ? n.sentences : [n.text])
+          .map(s => App.mdPlain(s)).join("\n"))
+        .join("\n");
+      pushLines("数据范围与约定", c);
+    } else if (view.constraints && view.constraints.length) {
       const c = view.constraints.map(x => App.mdPlain(x.text || x)).join("\n");
       pushLines("数据范围与约定", c);
     }
@@ -385,17 +404,11 @@ const App = {
     }
     ctx.stroke();
 
-    // 逐字绘制，随机微扰颜色与轻微垂直偏移
+    // 逐字绘制，统一实色（无透明度/颜色抖动）
     let cx = x;
+    ctx.fillStyle = "rgb(15, 23, 42)";
     for (const ch of text) {
       const jitter = (Math.random() - 0.5) * 1.2;
-      const alpha = 0.82 + Math.random() * 0.18;
-      // 偶尔混入一个极淡的干扰色字符
-      if (Math.random() < 0.04) {
-        ctx.fillStyle = `rgba(${120 + Math.random() * 60 | 0}, ${130 + Math.random() * 60 | 0}, ${160 + Math.random() * 60 | 0}, ${alpha * 0.5})`;
-      } else {
-        ctx.fillStyle = `rgba(15, 23, 42, ${alpha})`;
-      }
       ctx.fillText(ch, cx, y + jitter);
       cx += ctx.measureText(ch).width;
     }

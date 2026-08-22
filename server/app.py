@@ -92,7 +92,9 @@ async def api_submit(req: SubmitReq):
     avoid_key = req.avoid if req.avoid else None
 
     # 判题测试集与展示版本保持一致（用同一 view_token + avoid 选版本）
-    tests = view_tests(p, session, req.mode, view_token=token, avoid_key=avoid_key)
+    # view_tests 现返回图(Graph)结构 {"tests": [...], "graph": {...}}，取节点列表喂给判题引擎
+    test_bundle = view_tests(p, session, req.mode, view_token=token, avoid_key=avoid_key)
+    tests = test_bundle["tests"] if isinstance(test_bundle, dict) else test_bundle
     variant = build_view(p, session, req.mode, view_token=token, avoid_key=avoid_key)
 
     async with _JUDGE_SEM:

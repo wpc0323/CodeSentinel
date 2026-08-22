@@ -140,7 +140,13 @@ def _result(verdict, detail, message="", passed=None):
 
 
 def judge(code, tests, time_limit_ms, language="python3"):
-    """判题入口。language: python3 | cpp"""
+    """判题入口。language: python3 | cpp
+
+    tests 可为：纯测试点列表（节点），或 view_tests 返回的图结构
+    {"tests": [...], "graph": {...}}；此处统一取出节点列表，对图关系透明。
+    """
+    if isinstance(tests, dict) and "tests" in tests:
+        tests = tests["tests"]
     lang = (language or "python3").lower()
     if lang in ("python3", "python", "py"):
         return judge_python(code, tests, time_limit_ms)
